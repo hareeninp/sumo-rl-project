@@ -1,0 +1,28 @@
+<nodes>
+    <node id="J1" x="-600" y="300" type="traffic_light" />
+    <node id="J2" x="-300" y="450" type="traffic_light" />
+    <node id="J3" x="0" y="450" type="traffic_light" />
+    <node id="J4" x="300" y="400" type="traffic_light" />
+    <node id="J5" x="600" y="300" type="traffic_light" />
+    <node id="J6" x="-600" y="0" type="traffic_light" />
+    <node id="J7" x="-300" y="0" type="traffic_light" />
+    <node id="J8" x="0" y="0" type="traffic_light" />
+    <node id="J9" x="300" y="0" type="traffic_light" />
+    <node id="J10" x="600" y="0" type="traffic_light" />
+    <node id="J11" x="-600" y="-300" type="traffic_light" />
+    <node id="J12" x="-300" y="-400" type="traffic_light" />
+    <node id="J13" x="0" y="-450" type="traffic_light" />
+    <node id="J14" x="300" y="-350" type="traffic_light" />
+    <node id="J15" x="600" y="-300" type="traffic_light" />
+    <node id="J16" x="0" y="-150" type="traffic_light" />
+    <node id="HOSP1" x="-600" y="480" type="priority" />
+    <node id="HOSP2" x="0" y="630" type="priority" />
+    <node id="HOSP3" x="330" y="200" type="priority" />
+    <node id="HOSP4" x="150" y="-620" type="priority" />
+    <node id="HOME1" x="-780" y="300" type="priority" />
+    <node id="HOME2" x="-780" y="0" type="priority" />
+    <node id="HOME3" x="-780" y="-300" type="priority" />
+    <node id="HOME4" x="-150" y="-620" type="priority" />
+    <node id="HOME5" x="780" y="-300" type="priority" />
+    <node id="HOME6" x="780" y="0" type="priority" />
+<node id="FIRE1" x="-300" y="150" type="priority" /><node id="POLICE1" x="-750" y="-150" type="priority" /><node id="SHOP1" x="450" y="150" type="priority" /></nodes>
