@@ -57,10 +57,20 @@ def _resolve_csv_path(filename: str, custom_path: Optional[str] = None) -> str:
 
 def load_phase_config_from_csv(csv_path: Optional[str] = None) -> Dict[str, Dict[str, Any]]:
     """
-    Parses the authoritative Team 1 B1_TLS_PHASE_MAPPING.csv file and generates
-    the internal JUNCTION_PHASE_CONFIG dictionary.
+    Parses the authoritative Team 1 B1_TLS_PHASE_MAPPING.csv / tls_phases.csv file
+    and generates the internal JUNCTION_PHASE_CONFIG dictionary.
     """
-    target_csv = _resolve_csv_path("B1_TLS_PHASE_MAPPING.csv", csv_path)
+    target_csv = None
+    for name in ["B1_TLS_PHASE_MAPPING.csv", "tls_phases.csv"]:
+        try:
+            target_csv = _resolve_csv_path(name, csv_path)
+            break
+        except FileNotFoundError:
+            continue
+
+    if not target_csv:
+        target_csv = _resolve_csv_path("B1_TLS_PHASE_MAPPING.csv", csv_path)
+
     junctions: Dict[str, Dict[str, Any]] = {}
 
     with open(target_csv, "r", encoding="utf-8") as f:
@@ -68,14 +78,27 @@ def load_phase_config_from_csv(csv_path: Optional[str] = None) -> Dict[str, Dict
         for row in reader:
             junction_id = row["junction_id"].strip()
             tls_id = row["tls_id"].strip()
-            phase_id = int(row["phase_id"])
-            duration_sec = int(row["duration_sec"])
-            classification = row["classification"].strip().lower()
-            state_string = row["state_string"].strip()
-            is_green = row["is_green"].strip().upper() == "TRUE"
-            is_yellow = row["is_yellow"].strip().upper() == "TRUE"
-            is_all_red = row["is_all_red"].strip().upper() == "TRUE"
-            next_phase = int(row["next_phase"])
+
+            # Handle phase_index (Team 1 authoritative header) or phase_id (legacy header)
+            p_val = row.get("phase_index", row.get("phase_id", "0")).strip()
+            phase_id = int(p_val) if p_val else 0
+
+            d_val = row.get("duration_sec", "0").strip()
+            duration_sec = int(d_val) if d_val else 0
+
+            classification = row.get("classification", "").strip().lower()
+            state_string = row.get("state_string", "").strip()
+
+            # Support optional or derived boolean classification fields
+            is_green = (row["is_green"].strip().upper() == "TRUE") if "is_green" in row else (classification == "green")
+            is_yellow = (row["is_yellow"].strip().upper() == "TRUE") if "is_yellow" in row else (classification == "yellow")
+            is_all_red = (row["is_all_red"].strip().upper() == "TRUE") if "is_all_red" in row else (classification == "all-red")
+
+            n_val = row.get("next_phase", "").strip()
+            next_phase = int(n_val) if (n_val.isdigit() or (n_val.startswith('-') and n_val[1:].isdigit())) else -1
+
+            g_val = str(row.get("num_green_links", "")).strip()
+            num_green_links = int(g_val) if g_val.isdigit() else 0
 
             if junction_id not in junctions:
                 traffic_groups = DEFAULT_TRAFFIC_GROUPS.get(
@@ -97,9 +120,11 @@ def load_phase_config_from_csv(csv_path: Optional[str] = None) -> Dict[str, Dict
                     "phase_details": {},
                     "traffic_groups": traffic_groups,
                     "transitions": {},
+                    "phases_in_order": [],
                 }
 
             j_data = junctions[junction_id]
+            j_data["phases_in_order"].append(phase_id)
             j_data["phase_durations"][phase_id] = duration_sec
             j_data["next_phase"][phase_id] = next_phase
             j_data["phase_details"][phase_id] = {
@@ -110,6 +135,7 @@ def load_phase_config_from_csv(csv_path: Optional[str] = None) -> Dict[str, Dict
                 "is_yellow": is_yellow,
                 "is_all_red": is_all_red,
                 "next_phase": next_phase,
+                "num_green_links": num_green_links,
             }
 
             if classification == "green" and is_green:
@@ -123,7 +149,15 @@ def load_phase_config_from_csv(csv_path: Optional[str] = None) -> Dict[str, Dict
                 if phase_id not in j_data["yellow_phases"]:
                     j_data["yellow_phases"].append(phase_id)
 
+    # Post-process next_phase transitions if next_phase was not explicitly in CSV
     for jid, j_data in junctions.items():
+        p_list = j_data["phases_in_order"]
+        for idx, p_id in enumerate(p_list):
+            if j_data["next_phase"][p_id] == -1:
+                nxt = p_list[(idx + 1) % len(p_list)]
+                j_data["next_phase"][p_id] = nxt
+                j_data["phase_details"][p_id]["next_phase"] = nxt
+
         j_data["green_phases"] = sorted(list(set(j_data["green_phases"])))
         j_data["yellow_phases"] = sorted(list(set(j_data["yellow_phases"])))
         j_data["all_red_phases"] = sorted(list(set(j_data["all_red_phases"])))
@@ -182,7 +216,7 @@ def load_lane_movement_mapping_from_csv(csv_path: Optional[str] = None) -> Tuple
         3. movement_traffic_groups: junction_id -> {approach_edge: [lane_id_1, lane_id_2, ...]}
     """
     target_csv = None
-    for name in ["B1_LANE_MOVEMENT_MAPPING.csv", "tls_green_movements.csv"]:
+    for name in ["tls_green_movements.csv", "B1_LANE_MOVEMENT_MAPPING.csv"]:
         try:
             target_csv = _resolve_csv_path(name, csv_path)
             break
