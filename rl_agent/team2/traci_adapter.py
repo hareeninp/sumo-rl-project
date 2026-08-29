@@ -85,6 +85,26 @@ _INJECTED_PROVIDER: Optional[Any] = None
 _PROVIDER_EXPLICITLY_SET: bool = False
 
 
+def _get_default_provider() -> Optional[Any]:
+    """Attempts to auto-detect Team 1's traci_interface if available and active or imported."""
+    try:
+        import traci
+        if not traci.isLoaded():
+            return None
+    except ImportError:
+        pass
+
+    try:
+        from traci_interface import traci_interface as mod
+        return mod
+    except ImportError:
+        try:
+            import traci_interface
+            return traci_interface
+        except ImportError:
+            return None
+
+
 def set_traci_provider(provider: Optional[Any]) -> None:
     """
     Injects Team 1's actual TraCI module or adapter instance at runtime.
@@ -117,6 +137,10 @@ class TraCIAdapter:
             return self._provider
         if _INJECTED_PROVIDER is not None:
             return _INJECTED_PROVIDER
+        if not _PROVIDER_EXPLICITLY_SET:
+            default_p = _get_default_provider()
+            if default_p is not None:
+                return default_p
         return self._mock_fallback
 
     def start_sim(self, sumocfg_path: str = "") -> None:
@@ -177,7 +201,17 @@ class TraCIAdapter:
     def get_vehicle_position(self, vehicle_id: str) -> float:
         target = self._active_interface
         if hasattr(target, "get_vehicle_position"):
-            return target.get_vehicle_position(vehicle_id)
+            val = target.get_vehicle_position(vehicle_id)
+            if isinstance(val, (int, float)):
+                return float(val)
+            elif isinstance(val, (tuple, list)):
+                try:
+                    import traci
+                    if traci.isLoaded():
+                        return float(traci.vehicle.getLanePosition(vehicle_id))
+                except Exception:
+                    pass
+                return float(val[0]) if len(val) > 0 else 0.0
         return 0.0
 
     def get_vehicle_speed(self, vehicle_id: str) -> float:
@@ -191,6 +225,18 @@ class TraCIAdapter:
         if hasattr(target, "get_vehicle_edge"):
             return target.get_vehicle_edge(vehicle_id)
         return ""
+
+    def get_active_vehicles(self) -> List[str]:
+        target = self._active_interface
+        if hasattr(target, "get_active_vehicles"):
+            return target.get_active_vehicles()
+        try:
+            import traci
+            if traci.isLoaded():
+                return list(traci.vehicle.getIDList())
+        except Exception:
+            pass
+        return []
 
     def get_junction_state(self, junction_id: str, tls_id: str, lanes: List[str]) -> Dict[str, Any]:
         target = self._active_interface

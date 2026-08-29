@@ -39,7 +39,13 @@ def calculate_eta(
         pass
 
     target_idx = route_junctions.index(target_junction_id)
-    base_distance = (target_idx + 1) * DEFAULT_JUNCTION_DISTANCE - vehicle.current_position
+    pos_val = vehicle.current_position
+    if isinstance(pos_val, (tuple, list)):
+        pos_float = float(pos_val[0]) if len(pos_val) > 0 else 0.0
+    else:
+        pos_float = float(pos_val)
+
+    base_distance = (target_idx + 1) * DEFAULT_JUNCTION_DISTANCE - pos_float
     effective_distance = max(0.0, base_distance)
 
     eta_seconds = effective_distance / speed

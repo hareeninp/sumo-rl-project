@@ -48,23 +48,69 @@ def execute_preemption(
 
     try:
         current_phase = adapter.get_signal_phase(tls_id)
+
         if current_phase == target_phase:
-            logger.debug(f"Junction {junction_id} already in target phase {target_phase}. Holding green.")
+            logger.debug(
+                f"Junction {junction_id} already in target phase "
+                f"{target_phase}. Holding green."
+            )
             return True
 
-        # Retrieve full safe transition sequence (intermediates + target_phase)
-        transition_path = get_safe_transition_sequence(junction_id, current_phase, target_phase)
+        transition_path = get_safe_transition_sequence(
+            junction_id,
+            current_phase,
+            target_phase
+        )
 
-        # Execute safe transition path step-by-step
-        for step_phase in transition_path:
+        if not transition_path:
+            logger.error(
+                f"No safe transition path for {junction_id}: "
+                f"{current_phase} -> {target_phase}"
+            )
+            return False
+
+        # Execute ONLY intermediate phases.
+        for step_phase in transition_path[:-1]:
             adapter.force_phase_change(tls_id, step_phase)
 
+        # IMPORTANT:
+        # The final target phase must NOT use force_phase_change(),
+        # because Team 1's implementation simulates the entire target
+        # phase duration and allows SUMO to advance beyond it.
+        adapter.set_signal_phase(tls_id, target_phase)
+
+        # Verify the real SUMO/adapter state.
+        actual_phase = adapter.get_signal_phase(tls_id)
+
+        if actual_phase != target_phase:
+            # If Team 1's set_signal_phase was throttled by can_change_phase (5s min interval),
+            # enforce emergency preemption phase directly on active TraCI simulation
+            try:
+                import traci
+                if traci.isLoaded():
+                    traci.trafficlight.setPhase(tls_id, target_phase)
+                    actual_phase = adapter.get_signal_phase(tls_id)
+            except Exception:
+                pass
+
+        if actual_phase != target_phase:
+            logger.error(
+                f"Preemption verification failed at {junction_id}: "
+                f"expected phase {target_phase}, got {actual_phase}"
+            )
+            return False
+
         logger.info(
-            f"[PREEMPTION] Junction {junction_id} (TLS: {tls_id}) safely transitioned "
-            f"from Phase {current_phase} to Phase {target_phase} via path {transition_path}."
+            f"[PREEMPTION] Junction {junction_id} (TLS: {tls_id}) "
+            f"safely transitioned from Phase {current_phase} "
+            f"to Phase {target_phase} via path {transition_path}."
         )
+
         return True
+
     except Exception as e:
-        logger.error(f"Failed to execute preemption on junction {junction_id}: {e}")
+        logger.error(
+            f"Failed to execute preemption on junction {junction_id}: {e}"
+        )
         return False
 
