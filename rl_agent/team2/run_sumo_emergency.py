@@ -6,9 +6,10 @@ Executes multi-emergency vehicle priority control in SUMO simulation using cfg_m
   2. Reads vehicle telemetry (edge, position, speed) via TraCIAdapter
   3. Registers & verifies B2 emergency requests with secure tokens
   4. Pauses B1 Q-learning and grants B2 signal preemption on TLS IDs (J1..J16)
-  5. Executes safe signal transitions (B1_SAFE_TRANSITIONS.csv) & dynamic green corridor
-  6. Flushes cross-traffic queues during RECOVERY mode
-  7. Hands control back to B1 Q-learning when route is cleared (NORMAL mode)
+  5. Processes emergency vehicles sequentially (ensuring strict B1/B2 ownership protection)
+  6. Executes safe signal transitions (B1_SAFE_TRANSITIONS.csv) & dynamic green corridor
+  7. Flushes cross-traffic queues during RECOVERY mode
+  8. Completes HAND_BACK and resumes B1 Q-learning control after each emergency vehicle passes
 """
 
 import os
@@ -45,11 +46,11 @@ def extract_junction_sequence_from_edges(edges: List[str]) -> List[str]:
 
 def run_sumo_multi_ev_simulation(
     sumocfg_path: str = "A1_network/cfg_multi_ev.sumocfg",
-    max_sim_seconds: float = 300.0,
+    max_sim_seconds: float = 650.0,
 ) -> None:
     """
     Runs live SUMO simulation using cfg_multi_ev.sumocfg and manages
-    multi-emergency vehicle preemption and B1/B2 handoffs.
+    sequential multi-emergency vehicle preemption and B1/B2 handoffs.
     """
     print("\n" + "=" * 75)
     print(" REAL SUMO INTEGRATION: MULTI-EV EMERGENCY PREEMPTION & HANDOFF DEMO")
@@ -76,11 +77,16 @@ def run_sumo_multi_ev_simulation(
     resolved_cfg = os.path.abspath(sumocfg_path) if not os.path.isabs(sumocfg_path) else sumocfg_path
     adapter.start_sim(resolved_cfg)
 
-    processed_vehicles: Set[str] = set()
+    detected_vehicles: Set[str] = set()
+    processed_vehicles: List[str] = []
+    preempted_junctions_map: Dict[str, List[str]] = {}
+    recovery_completed_count: int = 0
+    handback_completed_count: int = 0
+    b1_resumed_count: int = 0
 
     try:
         while True:
-            # Step SUMO simulation by 1 second
+            # Step SUMO simulation by 1 step
             adapter.step()
 
             # Read current simulation time from TraCI
@@ -93,8 +99,9 @@ def run_sumo_multi_ev_simulation(
             except Exception:
                 current_time += 1.0
 
-            if current_time >= max_sim_seconds:
-                print(f"\n[SIMULATION] Reached target duration of {max_sim_seconds:.0f}s. Finishing.")
+            # Exit when max duration reached AND no active emergency preemption is in progress
+            if current_time >= max_sim_seconds and master.system_mode == "NORMAL":
+                print(f"\n[SIMULATION] Target duration of {max_sim_seconds:.0f}s reached and all handbacks completed.")
                 break
 
             # 1. Detect live active vehicles in SUMO simulation
@@ -106,11 +113,14 @@ def run_sumo_multi_ev_simulation(
                 if v.startswith(("ambulance", "firetruck", "police", "AMB", "EMERG"))
             ]
 
-            # 2. Check for new emergency vehicle detection if system is in NORMAL mode
-            if ev_candidates and master.system_mode == "NORMAL":
+            for ev in ev_candidates:
+                detected_vehicles.add(ev)
+
+            # 2. Check for new emergency vehicle detection ONLY if system is in NORMAL mode
+            if ev_candidates and master.system_mode == "NORMAL" and current_time < max_sim_seconds:
                 for veh_id in ev_candidates:
                     if veh_id not in processed_vehicles:
-                        processed_vehicles.add(veh_id)
+                        processed_vehicles.append(veh_id)
 
                         # Read vehicle telemetry from TraCI
                         curr_edge = adapter.get_vehicle_edge(veh_id)
@@ -132,6 +142,8 @@ def run_sumo_multi_ev_simulation(
                         junction_seq = extract_junction_sequence_from_edges(route_edges)
                         if not junction_seq:
                             junction_seq = ["J1", "J2", "J3"]
+
+                        preempted_junctions_map[veh_id] = junction_seq
 
                         # Determine emergency type based on vehicle ID
                         if "fire" in veh_id.lower():
@@ -184,13 +196,16 @@ def run_sumo_multi_ev_simulation(
 
             # 4. Advance Master System Controller if in EMERGENCY or RECOVERY mode
             if master.system_mode in ("EMERGENCY", "RECOVERY"):
+                prev_mode = master.system_mode
                 primary_j = master.b2_controller.route[master.b2_controller.current_junction_idx] if (
                     master.b2_controller.route and master.b2_controller.current_junction_idx < len(master.b2_controller.route)
                 ) else "J1"
 
                 tls_id = JUNCTION_PHASE_CONFIG.get(primary_j, {}).get("tls_id", primary_j)
                 dummy_j_state = {"current_phase": adapter.get_signal_phase(tls_id), "queues": {}}
-                master.step(
+
+                # Step master controller
+                res = master.step(
                     junction_id=primary_j,
                     tls_id=tls_id,
                     junction_state=dummy_j_state,
@@ -198,18 +213,33 @@ def run_sumo_multi_ev_simulation(
                     traci_interface=adapter._active_interface
                 )
 
+                # Track mode transitions
+                if prev_mode == "EMERGENCY" and master.system_mode == "RECOVERY":
+                    recovery_completed_count += 1
+                elif prev_mode == "RECOVERY" and master.system_mode == "NORMAL":
+                    handback_completed_count += 1
+                    b1_resumed_count += 1
+
     except KeyboardInterrupt:
         print("\n[SIMULATION] Simulation stopped by user.")
     except Exception as e:
         logger.error(f"Simulation error: {e}", exc_info=True)
     finally:
         adapter.close_sim()
+
         print("\n" + "=" * 75)
-        print(" SIMULATION COMPLETE & CLOSED SAFELY")
-        print(" Total processed emergency vehicles:", len(processed_vehicles))
-        print(" Processed vehicles list:", list(processed_vehicles))
+        print(" SUMMARY OF REAL SUMO EMERGENCY PREEMPTION & HANDBACK DEMO")
+        print("=" * 75)
+        print(f" Emergency Vehicles Detected:   {len(detected_vehicles)} ({list(detected_vehicles)})")
+        print(f" Emergency Vehicles Processed:  {len(processed_vehicles)} ({processed_vehicles})")
+        print(" Junctions Preempted per Vehicle:")
+        for v_id, j_list in preempted_junctions_map.items():
+            print(f"   - {v_id}: {' -> '.join(j_list)}")
+        print(f" Recovery Completed:            {recovery_completed_count} corridor(s)")
+        print(f" B2 Handback Completed:        {handback_completed_count} time(s)")
+        print(f" B1 Q-Learning Control Resumed: {b1_resumed_count} time(s)")
         print("=" * 75 + "\n")
 
 
 if __name__ == "__main__":
-    run_sumo_multi_ev_simulation(max_sim_seconds=300.0)
+    run_sumo_multi_ev_simulation(max_sim_seconds=650.0)
