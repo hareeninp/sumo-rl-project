@@ -1,43 +1,221 @@
-# Junction IDs
+# A2 TraCI configuration for the actual A1 SUMO network
+
 JUNCTION_IDS = [
-    "A0",
-    "A1",
-    "B0",
-    "B1"
+    "J1",
+    "J2",
+    "J3",
+    "J4",
+    "J5",
+    "J6",
+    "J7",
+    "J8",
+    "J9",
+    "J10",
+    "J11",
+    "J12",
+    "J13",
+    "J14",
+    "J15",
+    "J16",
 ]
 
-# Incoming lanes for each junction
+# Real incoming lanes from A1_network/network.net.xml
 INCOMING_LANES = {
-    "A0": [
-        "A1A0_0",
-        "B0A0_0"
+    "J1": [
+        "HOME1_J1_0",
+        "HOSP1_J1_0",
+        "J2_J1_0",
+        "J2_J1_1",
+        "J6_J1_0",
+        "J6_J1_1",
     ],
 
-    "A1": [
-        "A0A1_0",
-        "B1A1_0"
+    "J2": [
+        "J12_J2_0",
+        "J12_J2_1",
+        "J16_J2_0",
+        "J16_J2_1",
+        "J1_J2_0",
+        "J1_J2_1",
+        "J3_J2_0",
+        "J3_J2_1",
+        "J7_J2_0",
+        "J7_J2_1",
     ],
 
-    "B0": [
-        "A0B0_0",
-        "B1B0_0"
+    "J3": [
+        "HOSP2_J3_0",
+        "J16_J3_0",
+        "J16_J3_1",
+        "J2_J3_0",
+        "J2_J3_1",
+        "J4_J3_0",
+        "J4_J3_1",
+        "J8_J3_0",
+        "J8_J3_1",
     ],
 
-    "B1": [
-        "A1B1_0",
-        "B0B1_0"
-    ]
+    "J4": [
+        "J10_J4_0",
+        "J10_J4_1",
+        "J3_J4_0",
+        "J3_J4_1",
+        "J5_J4_0",
+        "J5_J4_1",
+        "J9_J4_0",
+        "J9_J4_1",
+    ],
+
+    "J5": [
+        "J10_J5_0",
+        "J10_J5_1",
+        "J4_J5_0",
+        "J4_J5_1",
+    ],
+
+    "J6": [
+        "HOME2_J6_0",
+        "J11_J6_0",
+        "J11_J6_1",
+        "J1_J6_0",
+        "J1_J6_1",
+        "J7_J6_0",
+        "J7_J6_1",
+        "J8_J6_0",
+        "J8_J6_1",
+        "POLICE1_J6_0",
+    ],
+
+    "J7": [
+        "FIRE1_J7_0",
+        "J12_J7_0",
+        "J12_J7_1",
+        "J2_J7_0",
+        "J2_J7_1",
+        "J6_J7_0",
+        "J6_J7_1",
+        "J8_J7_0",
+        "J8_J7_1",
+        "J9_J7_0",
+        "J9_J7_1",
+    ],
+
+    "J8": [
+        "J13_J8_0",
+        "J13_J8_1",
+        "J16_J8_0",
+        "J16_J8_1",
+        "J3_J8_0",
+        "J3_J8_1",
+        "J6_J8_0",
+        "J6_J8_1",
+        "J7_J8_0",
+        "J7_J8_1",
+        "J9_J8_0",
+        "J9_J8_1",
+    ],
+
+    "J9": [
+        "HOSP3_J9_0",
+        "J10_J9_0",
+        "J10_J9_1",
+        "J14_J9_0",
+        "J14_J9_1",
+        "J4_J9_0",
+        "J4_J9_1",
+        "J7_J9_0",
+        "J7_J9_1",
+        "J8_J9_0",
+        "J8_J9_1",
+        "SHOP1_J9_0",
+    ],
+
+    "J10": [
+        "HOME6_J10_0",
+        "J15_J10_0",
+        "J15_J10_1",
+        "J4_J10_0",
+        "J4_J10_1",
+        "J5_J10_0",
+        "J5_J10_1",
+        "J9_J10_0",
+        "J9_J10_1",
+    ],
+
+    "J11": [
+        "HOME3_J11_0",
+        "J12_J11_0",
+        "J12_J11_1",
+        "J16_J11_0",
+        "J16_J11_1",
+        "J6_J11_0",
+        "J6_J11_1",
+    ],
+
+    "J12": [
+        "J11_J12_0",
+        "J11_J12_1",
+        "J13_J12_0",
+        "J13_J12_1",
+        "J15_J12_0",
+        "J15_J12_1",
+        "J2_J12_0",
+        "J2_J12_1",
+        "J7_J12_0",
+        "J7_J12_1",
+    ],
+
+    "J13": [
+        "HOME4_J13_0",
+        "HOSP4_J13_0",
+        "J12_J13_0",
+        "J12_J13_1",
+        "J14_J13_0",
+        "J14_J13_1",
+        "J16_J13_0",
+        "J16_J13_1",
+        "J8_J13_0",
+        "J8_J13_1",
+    ],
+
+    "J14": [
+        "J13_J14_0",
+        "J13_J14_1",
+        "J15_J14_0",
+        "J15_J14_1",
+        "J9_J14_0",
+        "J9_J14_1",
+    ],
+
+    "J15": [
+        "HOME5_J15_0",
+        "J10_J15_0",
+        "J10_J15_1",
+        "J12_J15_0",
+        "J12_J15_1",
+        "J14_J15_0",
+        "J14_J15_1",
+    ],
+
+    "J16": [
+        "J11_J16_0",
+        "J11_J16_1",
+        "J13_J16_0",
+        "J13_J16_1",
+        "J2_J16_0",
+        "J2_J16_1",
+        "J3_J16_0",
+        "J3_J16_1",
+        "J8_J16_0",
+        "J8_J16_1",
+    ],
 }
 
-# Traffic-light IDs
+# This network currently uses priority junctions rather than TLS.
 TLS_IDS = {
-    # Currently these are placeholders because
-    # the present network has priority junctions.
-    "A0": None,
-    "A1": None,
-    "B0": None,
-    "B1": None
+    junction_id: None
+    for junction_id in JUNCTION_IDS
 }
 
-# Emergency vehicle
-EMERGENCY_VEHICLE_ID = "flow1.0"
+# Emergency vehicle used by the A2 telemetry test
+EMERGENCY_VEHICLE_ID = "ev_1"
