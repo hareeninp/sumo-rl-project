@@ -89,30 +89,29 @@ class MasterSystemController:
         for lane_list in traffic_groups.values():
             all_lanes.extend(lane_list)
 
-        # ========================================================
-        # MODE 1: EMERGENCY / RECOVERY (B2 Control)
-        # ========================================================
-        if self.system_mode in ("EMERGENCY", "RECOVERY"):
-            b2_state = self.b2_controller.step(
-                current_time=current_time,
-                junction_states={junction_id: junction_state},
-                traci_interface=traci_interface
-            )
+        # Step B2 controller to update network-wide arbitration & EV state machines
+        b2_state = self.b2_controller.step(
+            current_time=current_time,
+            junction_states={junction_id: junction_state},
+            traci_interface=traci_interface
+        )
 
-            # Update system mode based on B2 state
-            if b2_state == EmergencyState.RECOVERY:
-                self.system_mode = "RECOVERY"
-            elif b2_state == EmergencyState.NORMAL:
-                # B2 completed recovery and handback -> Resume NORMAL mode
-                self.system_mode = "NORMAL"
-                self._log("B2 handback completed. Resuming B1 Q-learning control.")
+        # Check if THIS specific junction is currently owned by B2 emergency preemption or recovering
+        is_j_owned_by_b2 = (junction_id in self.b2_controller.junction_ownership) or (
+            self.b2_controller.recovery_manager.is_recovering(junction_id, current_time)
+        )
 
+        if is_j_owned_by_b2:
+            self.system_mode = "EMERGENCY"
             return {
                 "active_controller": "B2",
-                "system_mode": self.system_mode,
+                "system_mode": "EMERGENCY",
                 "emergency_state": b2_state.name,
                 "action": "EMERGENCY_PREEMPTION",
             }
+
+        if not self.b2_controller.junction_ownership and not self.b2_controller.active_vehicles and not self.b2_controller.recovery_manager.active_recoveries:
+            self.system_mode = "NORMAL"
 
         # ========================================================
         # MODE 2: NORMAL (B1 Q-Learning Control)

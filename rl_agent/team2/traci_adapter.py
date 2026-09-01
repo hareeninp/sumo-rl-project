@@ -294,6 +294,20 @@ class TraCIAdapter:
             return target.get_route_to_target(vehicle_id, target_edge_id)
         return ([], float("inf"))
 
+    def get_vehicle_route(self, vehicle_id: str) -> List[str]:
+        target = self._active_interface
+        if hasattr(target, "get_vehicle_route"):
+            res = target.get_vehicle_route(vehicle_id)
+            if res:
+                return list(res)
+        try:
+            import traci
+            if traci.isLoaded() and vehicle_id in traci.vehicle.getIDList():
+                return list(traci.vehicle.getRoute(vehicle_id))
+        except Exception:
+            pass
+        return []
+
     def get_emergency_vehicle_junction(self, vehicle_id: str = "ev_1") -> Optional[str]:
         target = self._active_interface
         if hasattr(target, "get_emergency_vehicle_junction"):

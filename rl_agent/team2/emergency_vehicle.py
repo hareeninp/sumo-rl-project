@@ -92,6 +92,28 @@ class EmergencyVehicle:
         """
         self.set_route(junction_ids, edge_ids)
 
+    def get_edges_for_junction(self, junction_id: str) -> tuple:
+        """
+        Returns (from_edge, to_edge) for a given junction along this vehicle's assigned SUMO route edges.
+        """
+        if not self.edge_ids:
+            return ("", "")
+
+        for i in range(len(self.edge_ids) - 1):
+            in_e = self.edge_ids[i]
+            out_e = self.edge_ids[i + 1]
+            if in_e.endswith(f"_{junction_id}") or out_e.startswith(f"{junction_id}_"):
+                return (in_e, out_e)
+
+        if junction_id in self.junction_ids:
+            idx = self.junction_ids.index(junction_id)
+            if idx < len(self.edge_ids):
+                in_e = self.edge_ids[idx]
+                out_e = self.edge_ids[idx + 1] if idx + 1 < len(self.edge_ids) else ""
+                return (in_e, out_e)
+
+        return ("", "")
+
     def update_telemetry(self, current_edge: str, position: float = 0.0, speed: float = 15.0) -> None:
         """
         Updates the vehicle's telemetry data from TraCI.

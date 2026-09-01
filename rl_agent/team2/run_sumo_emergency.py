@@ -26,7 +26,10 @@ from rl_agent.team2.traci_adapter import get_traci_adapter, TraCIAdapter, set_tr
 from rl_agent.team2.token_service import generate_verification_token
 from rl_agent.team2.verification import register_token
 from rl_agent.team2.handoff import MasterSystemController
-from rl_agent.team2.phase_config import JUNCTION_PHASE_CONFIG
+from rl_agent.team2.phase_config import (
+    JUNCTION_PHASE_CONFIG,
+    get_green_phase_for_movement,
+)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
@@ -113,17 +116,20 @@ def run_sumo_multi_ev_simulation(
                         pos = adapter.get_vehicle_position(veh_id)
                         speed = adapter.get_vehicle_speed(veh_id)
 
-                        # Extract route edges via A2 route interface if available
-                        route_edges, _ = adapter.get_route_to_target(veh_id, "J9_HOSP3")
-
+                        # Obtain actual assigned SUMO route from TraCI (do NOT call findRoute to dynamically reroute)
+                        route_edges = adapter.get_vehicle_route(veh_id)
                         if not route_edges:
-                            route_edges = [curr_edge] if curr_edge else ["HOME1_J1", "J1_J2", "J2_J3"]
+                            try:
+                                import traci
+                                if traci.isLoaded() and veh_id in traci.vehicle.getIDList():
+                                    route_edges = list(traci.vehicle.getRoute(veh_id))
+                            except Exception:
+                                pass
 
                         junction_seq = extract_junction_sequence_from_edges(route_edges)
-                        if not junction_seq:
-                            junction_seq = ["J1", "J2", "J3"]
-
                         preempted_junctions_map[veh_id] = junction_seq
+
+                        print(f"\n[EV ROUTE]\n{veh_id}:\n{' -> '.join(route_edges)}", flush=True)
 
                         # Determine vehicle type, severity (Tier 1), and priority (Tier 2)
                         if "fire" in veh_id.lower():
@@ -169,6 +175,16 @@ def run_sumo_multi_ev_simulation(
                         print(f"\n[TIME {current_time:.0f}s] CONTINUOUS DETECTION: {veh_id} (Severity: {sev}, Type: {v_type}) detected on edge {curr_edge}", flush=True)
                         master.request_emergency(request_payload, team3_response, current_time=current_time)
 
+                        # SUMO-GUI Camera Tracking for ambulance_1
+                        if veh_id == "ambulance_1":
+                            try:
+                                import traci
+                                if traci.isLoaded():
+                                    traci.gui.trackVehicle("View #0", "ambulance_1")
+                                    traci.gui.setZoom("View #0", 1000)
+                            except Exception:
+                                pass
+
             # Track queued vehicles from controller
             for q_veh in master.b2_controller.pending_queue:
                 queued_vehicles.add(q_veh.vehicle_id)
@@ -194,31 +210,18 @@ def run_sumo_multi_ev_simulation(
                 except Exception:
                     pass
 
-            # 5. Advance Master System Controller if in EMERGENCY or RECOVERY mode
-            if master.system_mode in ("EMERGENCY", "RECOVERY"):
-                prev_mode = master.system_mode
-                primary_j = master.b2_controller.route[master.b2_controller.current_junction_idx] if (
-                    master.b2_controller.route and master.b2_controller.current_junction_idx < len(master.b2_controller.route)
-                ) else "J1"
-
-                tls_id = JUNCTION_PHASE_CONFIG.get(primary_j, {}).get("tls_id", primary_j)
+            # 5. Advance Master System Controller across network junctions
+            j_list = list(JUNCTION_PHASE_CONFIG.keys())
+            for j_id in j_list:
+                tls_id = JUNCTION_PHASE_CONFIG[j_id].get("tls_id", j_id)
                 dummy_j_state = {"current_phase": adapter.get_signal_phase(tls_id), "queues": {}}
-
-                # Step master controller
-                res = master.step(
-                    junction_id=primary_j,
+                master.step(
+                    junction_id=j_id,
                     tls_id=tls_id,
                     junction_state=dummy_j_state,
                     current_time=current_time,
                     traci_interface=adapter._active_interface
                 )
-
-                # Track mode transitions
-                if prev_mode == "EMERGENCY" and master.system_mode == "RECOVERY":
-                    recovery_completed_count += 1
-                elif prev_mode == "RECOVERY" and master.system_mode == "NORMAL":
-                    handback_completed_count += 1
-                    b1_resumed_count += 1
 
     except KeyboardInterrupt:
         print("\n[SIMULATION] Simulation stopped by user.")

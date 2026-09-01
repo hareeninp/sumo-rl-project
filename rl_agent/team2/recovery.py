@@ -60,6 +60,11 @@ class RecoveryManager:
         )
         return duration
 
+    def is_recovering(self, junction_id: str, current_time: float) -> bool:
+        if junction_id not in self.active_recoveries:
+            return False
+        return not self.is_recovery_complete(junction_id, current_time)
+
     def is_recovery_complete(self, junction_id: str, current_time: float) -> bool:
         if junction_id not in self.active_recoveries:
             return True

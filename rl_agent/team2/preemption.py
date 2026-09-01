@@ -69,24 +69,21 @@ def execute_preemption(
             )
             return False
 
-        # Execute ONLY intermediate phases.
+        # Execute intermediate clearance phases if needed
         for step_phase in transition_path[:-1]:
             adapter.force_phase_change(tls_id, step_phase)
 
-        # IMPORTANT:
-        # The final target phase must NOT use force_phase_change(),
-        # because Team 1's implementation simulates the entire target
-        # phase duration and allows SUMO to advance beyond it.
-        adapter.set_signal_phase(tls_id, target_phase)
-
-        # Verify the real SUMO/adapter state.
+        # Activate target green phase
+        adapter.force_phase_change(tls_id, target_phase)
         actual_phase = adapter.get_signal_phase(tls_id)
 
-        if actual_phase != target_phase:
-            # If set_signal_phase was throttled by can_change_phase (5s min interval),
-            # enforce emergency preemption phase via A2 force_phase_change interface.
-            adapter.force_phase_change(tls_id, target_phase)
-            actual_phase = adapter.get_signal_phase(tls_id)
+        # Extend target phase duration in SUMO so internal timer never expires during emergency hold
+        try:
+            import traci
+            if traci.isLoaded():
+                traci.trafficlight.setPhaseDuration(tls_id, 999.0)
+        except Exception:
+            pass
 
         if actual_phase != target_phase:
             logger.error(
