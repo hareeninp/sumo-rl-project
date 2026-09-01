@@ -21,11 +21,10 @@ def calculate_eta(
     current_time: float = 0.0
 ) -> float:
     """
-    Calculates estimated time of arrival (ETA in seconds) for an ambulance at a target junction.
+    Calculates estimated time of arrival (ETA in seconds) for an emergency vehicle at a target junction.
     """
     route_junctions = vehicle.junction_ids or vehicle.route
     if not route_junctions or target_junction_id not in route_junctions:
-        logger.warning(f"Target junction '{target_junction_id}' not found in route for vehicle '{vehicle.vehicle_id}'.")
         return 9999.0
 
     adapter: TraCIAdapter = get_traci_adapter(traci_interface)
@@ -35,6 +34,14 @@ def calculate_eta(
         live_speed = adapter.get_vehicle_speed(vehicle.vehicle_id)
         if live_speed and live_speed > 0:
             speed = live_speed
+
+        curr_edge = adapter.get_vehicle_edge(vehicle.vehicle_id)
+        if curr_edge and vehicle.edge_ids and curr_edge in vehicle.edge_ids:
+            curr_edge_idx = vehicle.edge_ids.index(curr_edge)
+            target_j_idx = route_junctions.index(target_junction_id)
+            # If vehicle is on an edge past the target junction, ETA is 0.0s (already reached/passed)
+            if curr_edge_idx > target_j_idx:
+                return 0.0
     except Exception:
         pass
 
@@ -45,13 +52,15 @@ def calculate_eta(
     else:
         pos_float = float(pos_val)
 
-    base_distance = (target_idx + 1) * DEFAULT_JUNCTION_DISTANCE - pos_float
-    effective_distance = max(0.0, base_distance)
+    # Dynamic distance calculation based on remaining route index
+    if vehicle.current_edge and vehicle.edge_ids and vehicle.current_edge in vehicle.edge_ids:
+        c_idx = vehicle.edge_ids.index(vehicle.current_edge)
+        t_idx = route_junctions.index(target_junction_id)
+        remaining_edges = max(0, t_idx - c_idx)
+        effective_distance = max(0.0, remaining_edges * 150.0 - pos_float)
+    else:
+        base_distance = (target_idx + 1) * DEFAULT_JUNCTION_DISTANCE - pos_float
+        effective_distance = max(0.0, base_distance)
 
     eta_seconds = effective_distance / speed
-    logger.debug(
-        f"ETA for {vehicle.vehicle_id} to {target_junction_id}: "
-        f"{eta_seconds:.1f}s (Distance: {effective_distance:.0f}m, Speed: {speed:.1f}m/s)"
-    )
-
     return round(eta_seconds, 1)

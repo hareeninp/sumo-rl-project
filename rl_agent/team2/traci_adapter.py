@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 class MockTraCIAdapter:
     """
-    Mock implementation of Team 1's 14 TraCI functions for offline testing without SUMO.
+    Mock implementation of Team 1's TraCI interface functions for offline testing without SUMO.
     """
 
     def __init__(self):
@@ -23,7 +23,7 @@ class MockTraCIAdapter:
         self.active_phases: Dict[str, int] = {}
         self.mock_queue_lengths: Dict[str, int] = {}
 
-    def start_sim(self, sumocfg_path: str = "") -> None:
+    def start_sim(self, sumocfg_path: str = "", gui: bool = False) -> None:
         self.sim_running = True
         self.step_counter = 0
         logger.info(f"[MOCK TraCI] Simulation started with config: '{sumocfg_path}'")
@@ -48,8 +48,9 @@ class MockTraCIAdapter:
     def get_signal_phase(self, tls_id: str) -> int:
         return self.active_phases.get(tls_id, 0)
 
-    def set_signal_phase(self, tls_id: str, phase_id: int) -> None:
+    def set_signal_phase(self, tls_id: str, phase_id: int) -> bool:
         self.active_phases[tls_id] = phase_id
+        return True
 
     def can_change_phase(self, tls_id: str, current_time: float) -> bool:
         return True
@@ -66,6 +67,44 @@ class MockTraCIAdapter:
 
     def get_vehicle_edge(self, vehicle_id: str) -> str:
         return "edge_01"
+
+    def get_vehicle_ids(self) -> List[str]:
+        return ["ambulance_1", "firetruck_1", "police_1"]
+
+    def get_active_vehicles(self) -> List[str]:
+        return self.get_vehicle_ids()
+
+    def get_all_active_evs(self) -> List[str]:
+        return ["ambulance_1", "firetruck_1", "police_1"]
+
+    def vehicle_exists(self, vehicle_id: str) -> bool:
+        return True
+
+    def get_simulation_time(self) -> float:
+        return float(self.step_counter)
+
+    def get_route_to_target(self, vehicle_id: str, target_edge_id: str) -> tuple:
+        return (["edge_01", "edge_05", "edge_08"], 120.0)
+
+    def get_emergency_vehicle_junction(self, vehicle_id: str = "ev_1") -> Optional[str]:
+        return "J1"
+
+    def get_ev_state(self, vehicle_id: str) -> Dict[str, Any]:
+        return {
+            "vehicle_id": vehicle_id,
+            "active": True,
+            "type": "ambulance",
+            "phase": "dispatch",
+            "condition": None,
+            "target": "J9_HOSP3",
+            "priority_weight": 2.5,
+            "position": (150.0, 150.0),
+            "speed": 15.0,
+            "current_edge": "edge_01"
+        }
+
+    def get_ev_priority(self, vehicle_id: str) -> float:
+        return 2.5
 
     def get_junction_state(self, junction_id: str, tls_id: str, lanes: List[str]) -> Dict[str, Any]:
         queues = {lane: self.get_queue_length(lane) for lane in lanes}
@@ -86,14 +125,7 @@ _PROVIDER_EXPLICITLY_SET: bool = False
 
 
 def _get_default_provider() -> Optional[Any]:
-    """Attempts to auto-detect Team 1's traci_interface if available and active or imported."""
-    try:
-        import traci
-        if not traci.isLoaded():
-            return None
-    except ImportError:
-        pass
-
+    """Attempts to auto-detect Team 1's traci_interface if available in system path."""
     try:
         from traci_interface import traci_interface as mod
         return mod
@@ -110,7 +142,7 @@ def set_traci_provider(provider: Optional[Any]) -> None:
     Injects Team 1's actual TraCI module or adapter instance at runtime.
 
     Args:
-        provider: Module or object implementing the 14 TraCI functions.
+        provider: Module or object implementing the TraCI public interface functions.
     """
     global _INJECTED_PROVIDER, _PROVIDER_EXPLICITLY_SET
     _INJECTED_PROVIDER = provider
@@ -143,10 +175,13 @@ class TraCIAdapter:
                 return default_p
         return self._mock_fallback
 
-    def start_sim(self, sumocfg_path: str = "") -> None:
+    def start_sim(self, sumocfg_path: str = "", gui: bool = False) -> None:
         target = self._active_interface
         if hasattr(target, "start_sim"):
-            target.start_sim(sumocfg_path)
+            try:
+                target.start_sim(sumocfg_path, gui=gui)
+            except TypeError:
+                target.start_sim(sumocfg_path)
 
     def step(self) -> None:
         target = self._active_interface
@@ -182,10 +217,11 @@ class TraCIAdapter:
             return target.get_signal_phase(tls_id)
         return 0
 
-    def set_signal_phase(self, tls_id: str, phase_id: int) -> None:
+    def set_signal_phase(self, tls_id: str, phase_id: int) -> bool:
         target = self._active_interface
         if hasattr(target, "set_signal_phase"):
-            target.set_signal_phase(tls_id, phase_id)
+            return target.set_signal_phase(tls_id, phase_id)
+        return False
 
     def can_change_phase(self, tls_id: str, current_time: float) -> bool:
         target = self._active_interface
@@ -205,12 +241,6 @@ class TraCIAdapter:
             if isinstance(val, (int, float)):
                 return float(val)
             elif isinstance(val, (tuple, list)):
-                try:
-                    import traci
-                    if traci.isLoaded():
-                        return float(traci.vehicle.getLanePosition(vehicle_id))
-                except Exception:
-                    pass
                 return float(val[0]) if len(val) > 0 else 0.0
         return 0.0
 
@@ -226,17 +256,61 @@ class TraCIAdapter:
             return target.get_vehicle_edge(vehicle_id)
         return ""
 
+    def get_vehicle_ids(self) -> List[str]:
+        target = self._active_interface
+        if hasattr(target, "get_vehicle_ids"):
+            return target.get_vehicle_ids()
+        return []
+
     def get_active_vehicles(self) -> List[str]:
         target = self._active_interface
-        if hasattr(target, "get_active_vehicles"):
+        if hasattr(target, "get_vehicle_ids"):
+            return target.get_vehicle_ids()
+        elif hasattr(target, "get_active_vehicles"):
             return target.get_active_vehicles()
-        try:
-            import traci
-            if traci.isLoaded():
-                return list(traci.vehicle.getIDList())
-        except Exception:
-            pass
         return []
+
+    def get_all_active_evs(self) -> List[str]:
+        target = self._active_interface
+        if hasattr(target, "get_all_active_evs"):
+            return target.get_all_active_evs()
+        return []
+
+    def vehicle_exists(self, vehicle_id: str) -> bool:
+        target = self._active_interface
+        if hasattr(target, "vehicle_exists"):
+            return target.vehicle_exists(vehicle_id)
+        return False
+
+    def get_simulation_time(self) -> float:
+        target = self._active_interface
+        if hasattr(target, "get_simulation_time"):
+            return target.get_simulation_time()
+        return 0.0
+
+    def get_route_to_target(self, vehicle_id: str, target_edge_id: str) -> tuple:
+        target = self._active_interface
+        if hasattr(target, "get_route_to_target"):
+            return target.get_route_to_target(vehicle_id, target_edge_id)
+        return ([], float("inf"))
+
+    def get_emergency_vehicle_junction(self, vehicle_id: str = "ev_1") -> Optional[str]:
+        target = self._active_interface
+        if hasattr(target, "get_emergency_vehicle_junction"):
+            return target.get_emergency_vehicle_junction(vehicle_id)
+        return None
+
+    def get_ev_state(self, vehicle_id: str) -> Dict[str, Any]:
+        target = self._active_interface
+        if hasattr(target, "get_ev_state"):
+            return target.get_ev_state(vehicle_id)
+        return {}
+
+    def get_ev_priority(self, vehicle_id: str) -> float:
+        target = self._active_interface
+        if hasattr(target, "get_ev_priority"):
+            return target.get_ev_priority(vehicle_id)
+        return 1.0
 
     def get_junction_state(self, junction_id: str, tls_id: str, lanes: List[str]) -> Dict[str, Any]:
         target = self._active_interface

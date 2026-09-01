@@ -83,15 +83,10 @@ def execute_preemption(
         actual_phase = adapter.get_signal_phase(tls_id)
 
         if actual_phase != target_phase:
-            # If Team 1's set_signal_phase was throttled by can_change_phase (5s min interval),
-            # enforce emergency preemption phase directly on active TraCI simulation
-            try:
-                import traci
-                if traci.isLoaded():
-                    traci.trafficlight.setPhase(tls_id, target_phase)
-                    actual_phase = adapter.get_signal_phase(tls_id)
-            except Exception:
-                pass
+            # If set_signal_phase was throttled by can_change_phase (5s min interval),
+            # enforce emergency preemption phase via A2 force_phase_change interface.
+            adapter.force_phase_change(tls_id, target_phase)
+            actual_phase = adapter.get_signal_phase(tls_id)
 
         if actual_phase != target_phase:
             logger.error(

@@ -168,9 +168,12 @@ last_change_time = {}
 # SIMULATION CONTROL
 # ============================================================
 
-def start_sim(sumocfg_path):
-    traci.start(["sumo", "-c", sumocfg_path])
-
+def start_sim(sumocfg_path, gui=False):
+    binary = "sumo-gui" if gui else "sumo"
+    cmd = [binary, "-c", sumocfg_path, "--start"]
+    if gui:
+        cmd.extend(["--delay", "100"])
+    traci.start(cmd)
 
 def step():
     traci.simulationStep()

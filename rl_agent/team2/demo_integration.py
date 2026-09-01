@@ -11,6 +11,13 @@ Demonstrates the step-by-step lifecycle of an emergency vehicle request:
   7. Safe Handback to B1 NORMAL mode
 """
 
+import os
+import sys
+
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+if BASE_DIR not in sys.path:
+    sys.path.insert(0, BASE_DIR)
+
 from rl_agent.team2.emergency_request import create_emergency_request
 from rl_agent.team2.team3_adapter import request_emergency_routing
 from rl_agent.team2.handoff import MasterSystemController

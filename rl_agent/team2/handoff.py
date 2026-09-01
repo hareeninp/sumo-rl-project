@@ -40,7 +40,7 @@ class MasterSystemController:
         formatted = f"[{self.system_mode}] {message}"
         self.log_history.append(formatted)
         logger.info(formatted)
-        print(formatted)
+        print(formatted, flush=True)
 
     def request_emergency(
         self,

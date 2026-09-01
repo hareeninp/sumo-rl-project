@@ -17,7 +17,8 @@ class EmergencyVehicle:
     vehicle_id: str
     vehicle_type: str = "AMBULANCE"
     emergency_type: str = "GENERAL"   # e.g., "TRAUMA", "CARDIAC", "GENERAL"
-    priority: int = 1                  # e.g., 1 for critical
+    severity: str = "NORMAL"          # Tier 1 priority: "CRITICAL", "HIGH", "NORMAL"
+    priority: int = 1                  # e.g., 1 for critical (backward compatible)
     verified: bool = False
     verification_token: Optional[str] = None
     start_location: Optional[Dict[str, float]] = None
@@ -35,6 +36,38 @@ class EmergencyVehicle:
     junction_ids: List[str] = field(default_factory=list)  # Target junction sequence
     overall_eta_minutes: float = 0.0
     request_time: float = 0.0          # Simulation timestamp when request was made
+
+    @property
+    def severity_rank(self) -> int:
+        """
+        Tier 1 priority rank:
+            CRITICAL = 3
+            HIGH     = 2
+            NORMAL   = 1
+        """
+        s = (self.severity or "").upper()
+        if s == "CRITICAL":
+            return 3
+        elif s == "HIGH":
+            return 2
+        return 1
+
+    @property
+    def vehicle_type_rank(self) -> int:
+        """
+        Tier 2 priority rank (used when severity is equal):
+            FIRE TRUCK = 3
+            AMBULANCE  = 2
+            POLICE     = 1
+        """
+        v = (self.vehicle_type or "").upper()
+        if any(k in v for k in ("FIRE", "TRUCK", "FIREBRIGADE")):
+            return 3
+        elif any(k in v for k in ("AMBULANCE", "AMB", "TRAUMA", "CARDIAC", "EMERGENCY")):
+            return 2
+        elif any(k in v for k in ("POLICE", "LAW_ENFORCEMENT")):
+            return 1
+        return 2
 
     @property
     def route(self) -> List[str]:
@@ -82,14 +115,7 @@ class EmergencyVehicle:
     ) -> "EmergencyVehicle":
         """
         Factory method constructing an EmergencyVehicle instance from an emergency request payload
-        and Team 3 API response.
-
-        Args:
-            request_payload: Emergency request payload dictionary.
-            team3_response: Team 3 API response payload dictionary.
-
-        Returns:
-            Configured EmergencyVehicle instance.
+        and Team 3 API response. Safely defaults missing severity/priority to NORMAL.
         """
         hospital_info = team3_response.get("hospital", {})
         route_info = team3_response.get("route", {})
@@ -97,11 +123,32 @@ class EmergencyVehicle:
         junction_ids = route_info.get("junctionIds", [])
         edge_ids = route_info.get("edgeIds", [])
 
+        # Parse severity safely (accepting severity string, priority int/string, or defaulting to NORMAL)
+        raw_sev = request_payload.get("severity")
+        raw_prio = request_payload.get("priority")
+
+        severity = "NORMAL"
+        if isinstance(raw_sev, str) and raw_sev.upper() in ("CRITICAL", "HIGH", "NORMAL"):
+            severity = raw_sev.upper()
+        elif isinstance(raw_prio, str) and raw_prio.upper() in ("CRITICAL", "HIGH", "NORMAL"):
+            severity = raw_prio.upper()
+        elif isinstance(raw_prio, int):
+            if raw_prio == 1:
+                severity = "CRITICAL"
+            elif raw_prio == 2:
+                severity = "HIGH"
+            else:
+                severity = "NORMAL"
+
+        # Determine vehicle type string
+        v_type = request_payload.get("vehicleType") or request_payload.get("vehicle_type") or "AMBULANCE"
+
         vehicle = cls(
             vehicle_id=request_payload.get("vehicleId", "AMB-001"),
-            vehicle_type=request_payload.get("vehicleType", "AMBULANCE"),
+            vehicle_type=v_type,
             emergency_type=request_payload.get("emergencyType", "TRAUMA"),
-            priority=request_payload.get("priority", 1),
+            severity=severity,
+            priority=raw_prio if isinstance(raw_prio, int) else (1 if severity == "CRITICAL" else (2 if severity == "HIGH" else 3)),
             verified=False,
             verification_token=request_payload.get("verificationToken"),
             start_location=request_payload.get("startLocation"),

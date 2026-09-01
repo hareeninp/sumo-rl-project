@@ -45,6 +45,10 @@ class EmergencyState(Enum):
 class EmergencyController:
     """
     Rule-based Emergency Signal Controller and Green Corridor Coordinator.
+    Supports multi-EV priority queuing and 3-tier arbitration:
+      Tier 1: Emergency severity (CRITICAL > HIGH > NORMAL)
+      Tier 2: Vehicle type (FIRE TRUCK > AMBULANCE > POLICE)
+      Tier 3: ETA / waiting time
     """
 
     def __init__(self, phase_config: Optional[Dict[str, Any]] = None):
@@ -56,6 +60,10 @@ class EmergencyController:
         self.current_junction_idx: int = 0
         self.recovery_manager = RecoveryManager()
 
+        self.pending_queue: List[EmergencyVehicle] = []
+        self.processed_vehicles: List[str] = []
+        self.request_payload_map: Dict[str, Dict[str, Any]] = {}
+
         self.state_start_time: float = 0.0
         self.log_history: List[str] = []
 
@@ -63,7 +71,22 @@ class EmergencyController:
         formatted = f"[{self.state.name}] {message}"
         self.log_history.append(formatted)
         logger.info(formatted)
-        print(formatted)
+        print(formatted, flush=True)
+
+    def _sort_pending_queue(self) -> None:
+        """
+        Sorts pending_queue using 3-Tier priority:
+          Tier 1: Emergency severity (CRITICAL = 3 > HIGH = 2 > NORMAL = 1)
+          Tier 2: Vehicle type (FIRE TRUCK = 3 > AMBULANCE = 2 > POLICE = 1)
+          Tier 3: ETA / waiting time (lower ETA / earlier request time)
+        """
+        self.pending_queue.sort(
+            key=lambda v: (
+                -v.severity_rank,
+                -v.vehicle_type_rank,
+                v.overall_eta_minutes if v.overall_eta_minutes > 0 else v.request_time
+            )
+        )
 
     def register_emergency(
         self,
@@ -73,20 +96,58 @@ class EmergencyController:
     ) -> bool:
         """
         Receives an emergency request and registers the emergency vehicle.
+        If another emergency vehicle is currently active, enqueues the vehicle
+        in the pending queue sorted by 3-Tier priority.
         """
-        self.active_vehicle = vehicle
-        self.raw_request = request_payload or {
+        payload = request_payload or {
             "vehicleId": vehicle.vehicle_id,
             "verificationToken": vehicle.verification_token,
             "priority": vehicle.priority,
+            "severity": vehicle.severity,
             "emergencyType": vehicle.emergency_type,
+            "vehicleType": vehicle.vehicle_type,
         }
-        self.route = list(vehicle.junction_ids)
-        self.current_junction_idx = 0
-        self.state_start_time = current_time
-        self.state = EmergencyState.EMERGENCY_DETECTED
-        self._log(f"Emergency request received for vehicle {vehicle.vehicle_id} ({vehicle.emergency_type}).")
-        return True
+        self.request_payload_map[vehicle.vehicle_id] = payload
+
+        # Check if vehicle is already processed or registered
+        if vehicle.vehicle_id in self.processed_vehicles:
+            return False
+
+        if self.active_vehicle and self.active_vehicle.vehicle_id == vehicle.vehicle_id:
+            return True
+
+        if any(v.vehicle_id == vehicle.vehicle_id for v in self.pending_queue):
+            return True
+
+        # If no active vehicle is currently being served
+        if self.active_vehicle is None:
+            self.active_vehicle = vehicle
+            self.raw_request = payload
+            self.route = list(vehicle.junction_ids)
+            self.current_junction_idx = 0
+            self.state_start_time = current_time
+            self.state = EmergencyState.EMERGENCY_DETECTED
+            self._log(
+                f"[B2 ARBITRATION]\n"
+                f"Vehicle: {vehicle.vehicle_id}\n"
+                f"Severity: {vehicle.severity}\n"
+                f"Vehicle Type: {vehicle.vehicle_type}\n"
+                f"Decision: SELECTED"
+            )
+            return True
+        else:
+            # Active vehicle exists -> Enqueue in pending_queue sorted by 3-Tier priority
+            vehicle.request_time = current_time
+            self.pending_queue.append(vehicle)
+            self._sort_pending_queue()
+            self._log(
+                f"[B2 ARBITRATION]\n"
+                f"Waiting: {vehicle.vehicle_id}\n"
+                f"Severity: {vehicle.severity}\n"
+                f"Vehicle Type: {vehicle.vehicle_type}\n"
+                f"Decision: QUEUED"
+            )
+            return True
 
     def update_emergency_route(
         self,
@@ -100,8 +161,13 @@ class EmergencyController:
         if self.active_vehicle and self.active_vehicle.vehicle_id == vehicle_id:
             self.active_vehicle.update_route(new_junction_ids, new_edge_ids)
             self.route = list(new_junction_ids)
-            self._log(f"Dynamic route update received for {vehicle_id}: {' -> '.join(new_junction_ids)}")
+            self._log(f"Dynamic route update received for active EV {vehicle_id}: {' -> '.join(new_junction_ids)}")
             return True
+        for queued_veh in self.pending_queue:
+            if queued_veh.vehicle_id == vehicle_id:
+                queued_veh.update_route(new_junction_ids, new_edge_ids)
+                self._log(f"Dynamic route update received for queued EV {vehicle_id}: {' -> '.join(new_junction_ids)}")
+                return True
         return False
 
     def step(
@@ -122,7 +188,7 @@ class EmergencyController:
             self._log(f"Proceeding to token verification for {self.active_vehicle.vehicle_id}.")
             return self.state
 
-        # 2. VERIFICATION -> PREEMPTION or NORMAL
+        # 2. VERIFICATION -> PREEMPTION or Next Queue / NORMAL
         if self.state == EmergencyState.VERIFICATION:
             verified = verify_emergency_request(self.raw_request)
             if verified:
@@ -133,9 +199,10 @@ class EmergencyController:
             else:
                 self.active_vehicle.verified = False
                 self._log(f"Token verification FAILED for {self.active_vehicle.vehicle_id}. Emergency preemption REJECTED.")
-                self.state = EmergencyState.NORMAL
+                self.processed_vehicles.append(self.active_vehicle.vehicle_id)
                 self.active_vehicle = None
                 self.raw_request = None
+                self.state = EmergencyState.HAND_BACK
             return self.state
 
         # 3. PREEMPTION -> GREEN_CORRIDOR
@@ -182,7 +249,7 @@ class EmergencyController:
                         self._log(f"Downstream junction {next_j} preparing priority (ETA: {next_eta}s).")
 
                 # Check if ambulance has reached/passed current junction
-                if eta <= 2.0 or (current_time - self.state_start_time) >= 10.0:  # Mock passing condition
+                if eta <= 2.0 or (current_time - self.state_start_time) >= 3.0:  # Dynamic passing condition
                     self.state = EmergencyState.AMBULANCE_PASSING
             return self.state
 
@@ -213,18 +280,44 @@ class EmergencyController:
                     all_complete = False
                     break
 
-            if all_complete or (current_time - self.state_start_time) >= 15.0:
+            if all_complete or (current_time - self.state_start_time) >= 3.0:
                 self.state = EmergencyState.HAND_BACK
             return self.state
 
-        # 7. HAND_BACK -> NORMAL
+        # 7. HAND_BACK -> Next Vehicle in Queue OR NORMAL
         if self.state == EmergencyState.HAND_BACK:
-            self._log("B2 releasing signal control. Handing back to B1.")
-            self.state = EmergencyState.NORMAL
-            self.active_vehicle = None
-            self.raw_request = None
-            self.route = []
-            self.current_junction_idx = 0
-            return self.state
+            if self.active_vehicle:
+                self.processed_vehicles.append(self.active_vehicle.vehicle_id)
+                self._log(f"Completed emergency preemption & recovery for {self.active_vehicle.vehicle_id}.")
+
+            # Filter pending queue to ensure no already processed vehicles remain
+            self.pending_queue = [v for v in self.pending_queue if v.vehicle_id not in self.processed_vehicles]
+            self._sort_pending_queue()
+
+            if self.pending_queue:
+                # Pop next highest priority emergency vehicle from queue
+                next_veh = self.pending_queue.pop(0)
+                self.active_vehicle = next_veh
+                self.raw_request = self.request_payload_map.get(next_veh.vehicle_id)
+                self.route = list(next_veh.junction_ids)
+                self.current_junction_idx = 0
+                self.state_start_time = current_time
+                self.state = EmergencyState.EMERGENCY_DETECTED
+                self._log(
+                    f"[B2 ARBITRATION]\n"
+                    f"Vehicle: {next_veh.vehicle_id}\n"
+                    f"Severity: {next_veh.severity}\n"
+                    f"Vehicle Type: {next_veh.vehicle_type}\n"
+                    f"Decision: SELECTED"
+                )
+                return self.state
+            else:
+                self._log("All emergency vehicles in queue processed. B2 releasing signal control. Handing back to B1.")
+                self.state = EmergencyState.NORMAL
+                self.active_vehicle = None
+                self.raw_request = None
+                self.route = []
+                self.current_junction_idx = 0
+                return self.state
 
         return self.state

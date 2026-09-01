@@ -59,8 +59,12 @@ def get_total_queue(junction_state: Dict[str, Any], lane_list: List[str]) -> int
 
     total = 0
 
-    # Case 1: junction_state contains a "queues" or "lane_queues" sub-dictionary
-    queues_dict = junction_state.get("queues") or junction_state.get("lane_queues")
+    # Case 1: junction_state contains a "queue_lengths", "queues", or "lane_queues" sub-dictionary
+    queues_dict = (
+        junction_state.get("queue_lengths")
+        or junction_state.get("queues")
+        or junction_state.get("lane_queues")
+    )
     if isinstance(queues_dict, dict):
         for lane_id in lane_list:
             total += int(queues_dict.get(lane_id, 0))
@@ -71,7 +75,7 @@ def get_total_queue(junction_state: Dict[str, Any], lane_list: List[str]) -> int
         if lane_id in junction_state:
             val = junction_state[lane_id]
             if isinstance(val, dict):
-                total += int(val.get("queue", val.get("queue_length", 0)))
+                total += int(val.get("queue_length", val.get("queue", val.get("halting", 0))))
             elif isinstance(val, (int, float)):
                 total += int(val)
 

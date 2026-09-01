@@ -15,7 +15,8 @@ def create_emergency_request(
     emergency_type: str = "TRAUMA",
     priority: int = 1,
     start_location: Optional[Dict[str, float]] = None,
-    vehicle_type: str = "AMBULANCE"
+    vehicle_type: str = "AMBULANCE",
+    severity: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Creates a new emergency request with an automatically generated and registered verification token.
@@ -26,6 +27,7 @@ def create_emergency_request(
         priority: Priority integer (e.g., 1 for critical).
         start_location: Dict with 'latitude' and 'longitude'.
         vehicle_type: Vehicle type string (default 'AMBULANCE').
+        severity: Tier 1 severity string ('CRITICAL', 'HIGH', 'NORMAL').
 
     Returns:
         JSON-serializable emergency request dictionary.
@@ -36,10 +38,20 @@ def create_emergency_request(
     token = generate_verification_token()
     register_token(token)
 
+    # Infer severity if not explicitly provided
+    if severity is None:
+        if priority == 1:
+            severity = "CRITICAL"
+        elif priority == 2:
+            severity = "HIGH"
+        else:
+            severity = "NORMAL"
+
     request_payload = {
         "vehicleId": vehicle_id,
         "vehicleType": vehicle_type,
         "emergencyType": emergency_type,
+        "severity": severity,
         "priority": priority,
         "startLocation": start_location,
         "verificationToken": token,
