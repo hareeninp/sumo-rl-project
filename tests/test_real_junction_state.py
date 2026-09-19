@@ -1,7 +1,7 @@
 import traci
 from traci_interface import start_sim, step, close_sim, get_junction_state
 
-start_sim("network.sumocfg")
+start_sim("A1_network/network.sumocfg")
 
 # Real junctions and their incoming lanes
 junctions = {

@@ -2,7 +2,7 @@ import traci
 from traci_interface import start_sim, step, close_sim
 from traci_interface import get_signal_phase, set_signal_phase
 
-start_sim("network.sumocfg")
+start_sim("A1_network/network.sumocfg")
 
 # Let simulation start
 step()
