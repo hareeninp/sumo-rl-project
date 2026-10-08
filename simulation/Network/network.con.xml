@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<connections>
+
+    <!-- J15 -> J14 -> J13 -->
+    <connection
+        from="J15_J14"
+        to="J14_J13"
+        fromLane="0"
+        toLane="0"/>
+
+    <connection
+        from="J15_J14"
+        to="J14_J13"
+        fromLane="1"
+        toLane="1"/>
+
+</connections>

@@ -1,0 +1,6 @@
+{
+  "name": "ResQRoute - Smart Emergency Routing & Green Corridor",
+  "description": "Intelligent emergency navigation, dynamic green corridor synchronization, live GPS tracking, and multi-vehicle priority coordination.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

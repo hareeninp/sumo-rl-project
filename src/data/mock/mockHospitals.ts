@@ -1,0 +1,101 @@
+import { Hospital } from '../../types';
+
+export const MOCK_HOSPITALS: Hospital[] = [
+  {
+    id: 'H1',
+    name: 'Metro General Hospital',
+    junctionId: 'J7',
+    latitude: 37.7730,
+    longitude: -122.4015,
+    x: 88,
+    y: 50,
+    specialties: [
+      'General Emergency',
+      'Trauma Level 1',
+      'Cardiac Emergency',
+      'Severe Bleeding',
+      'Breathing Difficulty',
+      'Fracture / Serious Injury',
+      'Abdominal Emergency',
+      'Unconscious / Unresponsive'
+    ],
+    capacityLevel: 'Available',
+    emergencyRoomsFree: 6,
+    phone: '+1 (555) 902-1000',
+  },
+  {
+    id: 'H2',
+    name: 'City Trauma & Burn Institute',
+    junctionId: 'J12',
+    latitude: 37.7615,
+    longitude: -122.4005,
+    x: 91,
+    y: 84,
+    specialties: [
+      'Burns',
+      'Road Accident / Major Trauma',
+      'Severe Bleeding',
+      'Head Injury',
+      'Poisoning / Toxic Exposure',
+      'General Emergency'
+    ],
+    capacityLevel: 'Available',
+    emergencyRoomsFree: 4,
+    phone: '+1 (555) 902-2200',
+  },
+  {
+    id: 'H3',
+    name: 'Apex Neurological & Stroke Center',
+    junctionId: 'J8',
+    latitude: 37.7815,
+    longitude: -122.3970,
+    x: 95,
+    y: 28,
+    specialties: [
+      'Stroke / Neurological Emergency',
+      'Head Injury',
+      'Seizure',
+      'Unconscious / Unresponsive',
+      'General Emergency'
+    ],
+    capacityLevel: 'Available',
+    emergencyRoomsFree: 3,
+    phone: '+1 (555) 902-3300',
+  },
+  {
+    id: 'H4',
+    name: 'St. Jude Heart & Vascular Center',
+    junctionId: 'J6',
+    latitude: 37.7745,
+    longitude: -122.4100,
+    x: 69,
+    y: 46,
+    specialties: [
+      'Cardiac Emergency',
+      'Breathing Difficulty',
+      'Severe Allergic Reaction',
+      'General Emergency'
+    ],
+    capacityLevel: 'Available',
+    emergencyRoomsFree: 5,
+    phone: '+1 (555) 902-4400',
+  },
+  {
+    id: 'H5',
+    name: 'Women & Children Specialty Hospital',
+    junctionId: 'J10',
+    latitude: 37.7635,
+    longitude: -122.4205,
+    x: 44,
+    y: 82,
+    specialties: [
+      'Pregnancy / Obstetric Emergency',
+      'Severe Allergic Reaction',
+      'General Emergency',
+      'Poisoning / Toxic Exposure'
+    ],
+    capacityLevel: 'Available',
+    emergencyRoomsFree: 7,
+    phone: '+1 (555) 902-5500',
+  },
+];

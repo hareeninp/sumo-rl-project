@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+POI (Point of Interest) markers for visual facility identification in sumo-gui.
+These are purely visual - they don't affect routing, just rendering.
+Load alongside the network with: sumo-gui -n network.net.xml -a poi.add.xml -r <routefile>
+or add <additional-files value="poi.add.xml"/> to your .sumocfg <input> block.
+
+Color legend:
+  Hospitals        = red    (1,0,0)
+  Fire Station      = orange (1,0.5,0)
+  Police Station    = blue   (0,0,1)
+  Shopping Complex  = purple (0.6,0,0.6)
+  Homes             = green  (0,0.7,0)
+-->
+<additional>
+    <poi id="poi_HOSP1" type="hospital" x="-600" y="480" color="1,0,0" layer="10" width="25" height="25"/>
+    <poi id="poi_HOSP2" type="hospital" x="0" y="630" color="1,0,0" layer="10" width="25" height="25"/>
+    <poi id="poi_HOSP3" type="hospital" x="330" y="200" color="1,0,0" layer="10" width="25" height="25"/>
+    <poi id="poi_HOSP4" type="hospital" x="150" y="-620" color="1,0,0" layer="10" width="25" height="25"/>
+
+    <poi id="poi_FIRE1" type="fire_station" x="-300" y="150" color="1,0.5,0" layer="10" width="25" height="25"/>
+    <poi id="poi_POLICE1" type="police_station" x="-750" y="-150" color="0,0,1" layer="10" width="25" height="25"/>
+    <poi id="poi_SHOP1" type="shopping_complex" x="450" y="150" color="0.6,0,0.6" layer="10" width="25" height="25"/>
+
+    <poi id="poi_HOME1" type="home" x="-780" y="300" color="0,0.7,0" layer="10" width="15" height="15"/>
+    <poi id="poi_HOME2" type="home" x="-780" y="0" color="0,0.7,0" layer="10" width="15" height="15"/>
+    <poi id="poi_HOME3" type="home" x="-780" y="-300" color="0,0.7,0" layer="10" width="15" height="15"/>
+    <poi id="poi_HOME4" type="home" x="-150" y="-620" color="0,0.7,0" layer="10" width="15" height="15"/>
+    <poi id="poi_HOME5" type="home" x="780" y="-300" color="0,0.7,0" layer="10" width="15" height="15"/>
+    <poi id="poi_HOME6" type="home" x="780" y="0" color="0,0.7,0" layer="10" width="15" height="15"/>
+</additional>
